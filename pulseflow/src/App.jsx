@@ -121,7 +121,7 @@ export default function PulseFlowStarterApp() {
   useEffect(() => {
     const stored = loadData();
     setData(stored);
-  }, []);
+  }, []); 
 
   useEffect(() => {
     saveData(data);
