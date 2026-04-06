@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Activity, CalendarDays, HeartPulse, TrendingUp, User } from "lucide-react";
+import { downloadFHIRBundle, generateFHIRId, toFHIRObservation, toFHIRPatient } from "./fhirAdapter.js";
 import {
   LineChart,
   Line,
@@ -9,6 +10,7 @@ import {
   Tooltip,
   ResponsiveContainer,
   Legend,
+  ReferenceLine,
 } from "recharts";
 
 const STORAGE_KEY = "pulseflow-demo-data-v1";
@@ -134,8 +136,13 @@ export default function PulseFlowStarterApp() {
   const latest = sortedReadings[sortedReadings.length - 1];
 
   const avg = useMemo(() => {
-    if (!sortedReadings.length) return { systolic: 0, diastolic: 0 };
-    const totals = sortedReadings.reduce(
+    if (!sortedReadings.length) return { systolic: 0, diastolic: 0, label: "No Data" };
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 30);
+    const recent = sortedReadings.filter((r) => new Date(r.date) >= cutoff);
+    const source = recent.length > 0 ? recent : sortedReadings;
+    const label = recent.length > 0 ? "30-Day Average" : "All-Time Average";
+    const totals = source.reduce(
       (acc, r) => {
         acc.systolic += Number(r.systolic);
         acc.diastolic += Number(r.diastolic);
@@ -143,10 +150,10 @@ export default function PulseFlowStarterApp() {
       },
       { systolic: 0, diastolic: 0 }
     );
-
     return {
-      systolic: Math.round(totals.systolic / sortedReadings.length),
-      diastolic: Math.round(totals.diastolic / sortedReadings.length),
+      systolic: Math.round(totals.systolic / source.length),
+      diastolic: Math.round(totals.diastolic / source.length),
+      label,
     };
   }, [sortedReadings]);
 
@@ -190,7 +197,7 @@ export default function PulseFlowStarterApp() {
     }
 
     const newReading = {
-      id: Date.now(),
+      id: generateFHIRId(),
       date: form.date,
       systolic,
       diastolic,
@@ -245,17 +252,31 @@ export default function PulseFlowStarterApp() {
           <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
             <span
               style={{
-                background: "#dcfce7",
-                color: "#166534",
-                border: "1px solid #bbf7d0",
+                background: "#dbeafe",
+                color: "#1e40af",
+                border: "1px solid #bfdbfe",
                 borderRadius: "999px",
                 padding: "8px 12px",
                 fontSize: "13px",
                 fontWeight: 700,
               }}
             >
-              Demo Mode
+              FHIR Simulated
             </span>
+            <button
+              onClick={() => downloadFHIRBundle(sortedReadings, data.patient)}
+              style={{
+                padding: "10px 14px",
+                borderRadius: "10px",
+                border: "1px solid #bfdbfe",
+                background: "#eff6ff",
+                color: "#1e40af",
+                cursor: "pointer",
+                fontWeight: 600,
+              }}
+            >
+              Download FHIR Bundle
+            </button>
             <button
               onClick={resetDemo}
               style={{
@@ -314,6 +335,12 @@ export default function PulseFlowStarterApp() {
               <div><strong>MRN:</strong> {data.patient.mrn}</div>
               <div><strong>Age:</strong> {data.patient.age}</div>
               <div><strong>Condition:</strong> {data.patient.condition}</div>
+              <div>
+                <strong>FHIR ID:</strong>{" "}
+                <code style={{ fontSize: "11px", background: "#f1f5f9", padding: "2px 6px", borderRadius: "4px", color: "#1e40af" }}>
+                  {toFHIRPatient(data.patient).id}
+                </code>
+              </div>
             </div>
           </div>
 
@@ -333,14 +360,14 @@ export default function PulseFlowStarterApp() {
 
           <div style={cardStyle()}>
             <div style={sectionTitleStyle()}>
-              <TrendingUp size={20} /> Average Trend
+              <TrendingUp size={20} /> {avg.label}
             </div>
             <div style={{ fontSize: "34px", fontWeight: 800, marginBottom: "10px" }}>
               {avg.systolic}/{avg.diastolic}
               <span style={{ fontSize: "16px", color: "#64748b", marginLeft: "8px" }}>mmHg</span>
             </div>
             <div style={{ color: "#64748b", marginBottom: "12px", fontSize: "14px" }}>
-              Average across current stored readings
+              {avg.label} across stored readings
             </div>
             {badge(avgStatus)}
           </div>
@@ -368,6 +395,10 @@ export default function PulseFlowStarterApp() {
                   <Legend />
                   <Line type="monotone" dataKey="systolic" stroke="#ef4444" strokeWidth={3} dot={{ r: 4 }} />
                   <Line type="monotone" dataKey="diastolic" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4 }} />
+                  <ReferenceLine y={140} stroke="#ef4444" strokeDasharray="6 3" strokeWidth={1.5}
+                    label={{ value: "Sys 140", position: "insideTopRight", fontSize: 11, fill: "#ef4444" }} />
+                  <ReferenceLine y={90} stroke="#3b82f6" strokeDasharray="6 3" strokeWidth={1.5}
+                    label={{ value: "Dia 90", position: "insideTopRight", fontSize: 11, fill: "#3b82f6" }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -488,6 +519,7 @@ export default function PulseFlowStarterApp() {
                   <th style={{ padding: "12px 8px" }}>Diastolic</th>
                   <th style={{ padding: "12px 8px" }}>Status</th>
                   <th style={{ padding: "12px 8px" }}>Notes</th>
+                  <th style={{ padding: "12px 8px" }}>FHIR Resource ID</th>
                 </tr>
               </thead>
               <tbody>
@@ -500,6 +532,9 @@ export default function PulseFlowStarterApp() {
                       <td style={{ padding: "12px 8px" }}>{reading.diastolic}</td>
                       <td style={{ padding: "12px 8px" }}>{badge(status)}</td>
                       <td style={{ padding: "12px 8px" }}>{reading.notes || "—"}</td>
+                      <td style={{ padding: "12px 8px", fontFamily: "monospace", fontSize: "11px", color: "#64748b" }}>
+                        {toFHIRObservation(reading, data.patient.id).id}
+                      </td>
                     </tr>
                   );
                 })}
