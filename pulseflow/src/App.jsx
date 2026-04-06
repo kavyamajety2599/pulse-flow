@@ -119,6 +119,7 @@ export default function PulseFlowStarterApp() {
     notes: "",
   });
   const [error, setError] = useState("");
+  const [activeView, setActiveView] = useState("patient");
 
   useEffect(() => {
     const stored = loadData();
@@ -293,24 +294,45 @@ export default function PulseFlowStarterApp() {
           </div>
         </div>
 
-        {titrationAlert && (
-          <div
-            style={{
-              marginBottom: "24px",
-              background: "#fef2f2",
-              border: "1px solid #fecaca",
-              borderRadius: "16px",
-              padding: "16px",
-              display: "flex",
-              alignItems: "flex-start",
-              gap: "12px",
-            }}
-          >
+        {/* View toggle */}
+        <div style={{ display: "flex", gap: "8px", marginBottom: "24px" }}>
+          {["patient", "provider"].map((view) => (
+            <button
+              key={view}
+              onClick={() => setActiveView(view)}
+              style={{
+                padding: "10px 24px",
+                borderRadius: "10px",
+                border: "none",
+                background: activeView === view ? "#2563eb" : "#e2e8f0",
+                color: activeView === view ? "white" : "#475569",
+                fontWeight: 700,
+                cursor: "pointer",
+                fontSize: "14px",
+                textTransform: "capitalize",
+              }}
+            >
+              {view === "patient" ? "Patient View" : "Provider View"}
+            </button>
+          ))}
+        </div>
+
+        {/* Patient view: soft alert */}
+        {activeView === "patient" && titrationAlert && (
+          <div style={{ marginBottom: "24px", background: "#fef3c7", border: "1px solid #fde68a", borderRadius: "16px", padding: "16px", display: "flex", alignItems: "flex-start", gap: "12px" }}>
+            <HeartPulse size={20} color="#92400e" />
+            <div style={{ color: "#92400e", lineHeight: 1.5 }}>
+              Your recent readings have been consistently elevated. Please contact your care provider.
+            </div>
+          </div>
+        )}
+
+        {/* Provider view: full clinical alert */}
+        {activeView === "provider" && titrationAlert && (
+          <div style={{ marginBottom: "24px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "16px", padding: "16px", display: "flex", alignItems: "flex-start", gap: "12px" }}>
             <HeartPulse size={20} color="#b91c1c" />
             <div>
-              <div style={{ fontWeight: 800, color: "#991b1b", marginBottom: "4px" }}>
-                Titration Required
-              </div>
+              <div style={{ fontWeight: 800, color: "#991b1b", marginBottom: "4px" }}>Titration Required</div>
               <div style={{ color: "#7f1d1d", lineHeight: 1.5 }}>
                 The last 3 readings are consistently above 140/90. Provider follow-up is recommended.
               </div>
@@ -326,7 +348,7 @@ export default function PulseFlowStarterApp() {
             marginBottom: "24px",
           }}
         >
-          <div style={cardStyle()}>
+          {activeView === "provider" && <div style={cardStyle()}>
             <div style={sectionTitleStyle()}>
               <User size={20} /> Patient Context
             </div>
@@ -342,7 +364,7 @@ export default function PulseFlowStarterApp() {
                 </code>
               </div>
             </div>
-          </div>
+          </div>}
 
           <div style={cardStyle()}>
             <div style={sectionTitleStyle()}>
@@ -404,7 +426,7 @@ export default function PulseFlowStarterApp() {
             </div>
           </div>
 
-          <div style={cardStyle()}>
+          {activeView === "patient" && <div style={cardStyle()}>
             <div style={sectionTitleStyle()}>Add Reading</div>
             <form onSubmit={handleSubmit} style={{ display: "grid", gap: "14px" }}>
               <div>
@@ -502,13 +524,13 @@ export default function PulseFlowStarterApp() {
               </button>
 
               <div style={{ color: "#64748b", fontSize: "12px", lineHeight: 1.5 }}>
-                In this starter version, readings are stored in local browser storage for demo purposes.
+                Readings are stored locally and structured as FHIR R4 Observation resources.
               </div>
             </form>
-          </div>
+          </div>}
         </div>
 
-        <div style={cardStyle()}>
+        {activeView === "provider" && <div style={cardStyle()}>
           <div style={sectionTitleStyle()}>Recent Readings</div>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "14px" }}>
@@ -541,7 +563,7 @@ export default function PulseFlowStarterApp() {
               </tbody>
             </table>
           </div>
-        </div>
+        </div>}
       </div>
     </div>
   );
