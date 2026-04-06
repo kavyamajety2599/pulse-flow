@@ -16,7 +16,7 @@ The application was deployed using Vercel, which provides seamless integration w
 
 ## Short Demo
 
-[Insert link to demo video here — record a screen recording under 5 minutes showing: the Patient/Provider toggle, adding a reading, the titration alert, and the Download FHIR Bundle feature]
+[![PulseFlow Demo](https://youtu.be/WGykmXcZ2bY/0.jpg)](https://youtu.be/WGykmXcZ2bY)
 
 ---
 
