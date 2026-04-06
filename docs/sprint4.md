@@ -8,7 +8,7 @@
 ## Deployment
 
 The PulseFlow application is deployed and publicly accessible at:  
-**https://pulse-flow-3qfwlv9lf-kavyamajety25s-projects.vercel.app/**
+**https://pulse-flow-eta.vercel.app/**
 
 The application was deployed using Vercel, which provides seamless integration with our GitHub repository and automatically redeploys on every push to the main branch. No backend infrastructure is required as the application is a client-side React SPA.
 
