@@ -13,16 +13,10 @@ async function createResource(resource) {
 
   const url = `${HAPI_BASE}/${body.resourceType}`;
 
-  // If-None-Exist with a unique nonce forces HAPI to always treat this as a
-  // fresh create — it will never find a match, so it never returns 412.
-  const nonce = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  const ifNoneExist = `identifier=pulseflow-nonce-${nonce}`;
-
   const res = await fetch(url, {
     method: "POST",
     headers: {
       ...FHIR_HEADERS,
-      "If-None-Exist": ifNoneExist,
     },
     body: JSON.stringify(body),
   });
@@ -30,7 +24,7 @@ async function createResource(resource) {
   if (!res.ok) {
     const text = await res.text();
     throw new Error(
-      `FHIR POST ${body.resourceType} failed (${res.status}): ${text.slice(0, 500)}`
+      `FHIR POST ${body.resourceType} failed (${res.status}): ${text.slice(0, 300)}`
     );
   }
   return res.json();
