@@ -97,7 +97,8 @@ export function toFHIRPatient(patient) {
   return {
     resourceType: "Patient",
     id: `${FHIR_BASE}${patient.id}`,
-    identifier: [{ system: "urn:pulseflow:mrn", value: patient.mrn }],
+    // Comment this out to bypass the duplicate MRN check on the public HAPI server
+    // identifier: [{ system: "urn:pulseflow:mrn", value: patient.mrn }],
     name: [{ text: patient.name }],
     birthDate: `${new Date().getFullYear() - patient.age}-01-01`,
     extension: [
