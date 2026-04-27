@@ -11,33 +11,48 @@ const FHIR_HEADERS = {
   Accept: "application/fhir+json",
 };
 
-async function postResource(resource) {
-  const res = await fetch(`${HAPI_BASE}/${resource.resourceType}`, {
-    method: "POST",
+// fhirService.js
+
+async function upsertResource(resource) {
+  // Use PUT to [base]/[Type]/[id] for idempotency
+  const url = `${HAPI_BASE}/${resource.resourceType}/${resource.id}`;
+  
+  const res = await fetch(url, {
+    method: "PUT", // Changed from POST
     headers: FHIR_HEADERS,
     body: JSON.stringify(resource),
   });
+
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`FHIR POST ${resource.resourceType} failed (${res.status}): ${text.slice(0, 300)}`);
+    throw new Error(`FHIR PUT ${resource.resourceType} failed (${res.status}): ${text.slice(0, 300)}`);
   }
   return res.json();
 }
 
 // POST patient + all existing readings to HAPI FHIR R4.
 // Returns { serverPatientId, serverReadings } with real server-assigned IDs.
+// fhirService.js
+
 export async function connectToFHIR(patient, readings) {
-  // POST patient — strip local URN id so server assigns its own UUID
-  const { id: _pid, ...fhirPatientBody } = toFHIRPatient(patient);
-  const serverPatient = await postResource(fhirPatientBody);
+  // Prepare the patient resource
+  const fhirPatient = toFHIRPatient(patient);
+  
+  // Use the MRN as part of the ID to ensure uniqueness on the public server
+  // Example: "pf-patient-12345"
+  fhirPatient.id = `pf-pt-${patient.mrn}`; 
+
+  const serverPatient = await upsertResource(fhirPatient);
   const serverPatientId = serverPatient.id;
 
-  // POST all readings as Observations in parallel
   const serverReadings = await Promise.all(
     readings.map(async (reading) => {
-      const { id: _oid, ...fhirObsBody } = toFHIRObservation(reading, serverPatientId);
-      fhirObsBody.subject = { reference: `Patient/${serverPatientId}` };
-      const serverObs = await postResource(fhirObsBody);
+      const fhirObs = toFHIRObservation(reading, serverPatientId);
+      
+      // Ensure the Observation has a unique ID for the PUT request
+      fhirObs.id = `pf-obs-${reading.id}`; 
+      
+      const serverObs = await upsertResource(fhirObs);
       return { ...reading, id: serverObs.id, fhirServerId: serverObs.id };
     })
   );
@@ -47,10 +62,14 @@ export async function connectToFHIR(patient, readings) {
 
 // POST a single new reading as an Observation to HAPI FHIR R4.
 // Returns the reading updated with the server-assigned FHIR ID.
+
 export async function postObservationToFHIR(reading, serverPatientId) {
-  const { id: _oid, ...fhirObsBody } = toFHIRObservation(reading, serverPatientId);
-  fhirObsBody.subject = { reference: `Patient/${serverPatientId}` };
-  const serverObs = await postResource(fhirObsBody);
+  const fhirObs = toFHIRObservation(reading, serverPatientId);
+  
+  // Assign a stable ID for the PUT operation
+  fhirObs.id = `pf-obs-${reading.id}`;
+  
+  const serverObs = await upsertResource(fhirObs);
   return { ...reading, id: serverObs.id, fhirServerId: serverObs.id };
 }
 
