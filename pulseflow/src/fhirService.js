@@ -35,12 +35,11 @@ async function upsertResource(resource) {
 // fhirService.js
 
 export async function connectToFHIR(patient, readings) {
-  // Prepare the patient resource
   const fhirPatient = toFHIRPatient(patient);
   
-  // Use the MRN as part of the ID to ensure uniqueness on the public server
-  // Example: "pf-patient-12345"
-  fhirPatient.id = `pf-pt-${patient.mrn}`; 
+  // Use a timestamp to ensure a unique resource path for this specific session
+  const uniqueSessionId = `pf-pt-${Date.now()}`; 
+  fhirPatient.id = uniqueSessionId; 
 
   const serverPatient = await upsertResource(fhirPatient);
   const serverPatientId = serverPatient.id;
@@ -49,8 +48,8 @@ export async function connectToFHIR(patient, readings) {
     readings.map(async (reading) => {
       const fhirObs = toFHIRObservation(reading, serverPatientId);
       
-      // Ensure the Observation has a unique ID for the PUT request
-      fhirObs.id = `pf-obs-${reading.id}`; 
+      // Use a timestamp here too to prevent Observation collisions
+      fhirObs.id = `pf-obs-${reading.id}-${Date.now()}`; 
       
       const serverObs = await upsertResource(fhirObs);
       return { ...reading, id: serverObs.id, fhirServerId: serverObs.id };
