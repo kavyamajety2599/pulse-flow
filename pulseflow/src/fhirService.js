@@ -15,6 +15,7 @@ const FHIR_HEADERS = {
 async function createResource(resource) {
   // Strip the id so the server treats this as a pure create
   const { id: _dropped, ...body } = resource;
+  console.log("POSTing to FHIR:", JSON.stringify(body, null, 2));
 
   const url = `${HAPI_BASE}/${body.resourceType}`;
   const res = await fetch(url, {
