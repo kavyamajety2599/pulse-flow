@@ -20,7 +20,7 @@ const seedData = {
   patient: {
     id: "pt-001",
     name: "John Doe",
-    mrn: "12345",
+    mrn: "pulseflow-" + Math.random().toString(36).substring(7),
     age: 54,
     condition: "Stage 1/2 Hypertension Monitoring",
   },
