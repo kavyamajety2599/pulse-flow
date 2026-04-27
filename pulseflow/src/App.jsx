@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Activity, CalendarDays, HeartPulse, TrendingUp, User } from "lucide-react";
 import { downloadFHIRBundle, generateFHIRId, toFHIRObservation, toFHIRPatient } from "./fhirAdapter.js";
+import { connectToFHIR, postObservationToFHIR, HAPI_BASE } from "./fhirService.js";
 import {
   LineChart,
   Line,
@@ -120,6 +121,8 @@ export default function PulseFlowStarterApp() {
   });
   const [error, setError] = useState("");
   const [activeView, setActiveView] = useState("patient");
+  const [fhirConn, setFhirConn] = useState({ status: "simulated", serverPatientId: null, error: null });
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     const stored = loadData();
@@ -180,7 +183,7 @@ export default function PulseFlowStarterApp() {
     setForm((prev) => ({ ...prev, [name]: value }));
   }
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
     setError("");
 
@@ -205,22 +208,37 @@ export default function PulseFlowStarterApp() {
       notes: form.notes.trim(),
     };
 
-    setData((prev) => ({
-      ...prev,
-      readings: [...prev.readings, newReading],
-    }));
-
-    setForm({
-      date: new Date().toISOString().slice(0, 10),
-      systolic: "",
-      diastolic: "",
-      notes: "",
-    });
+    setSubmitting(true);
+    try {
+      if (fhirConn.status === "connected") {
+        const serverReading = await postObservationToFHIR(newReading, fhirConn.serverPatientId);
+        setData((prev) => ({ ...prev, readings: [...prev.readings, serverReading] }));
+      } else {
+        setData((prev) => ({ ...prev, readings: [...prev.readings, newReading] }));
+      }
+      setForm({ date: new Date().toISOString().slice(0, 10), systolic: "", diastolic: "", notes: "" });
+    } catch (err) {
+      setError(`Failed to save reading: ${err.message}`);
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   function resetDemo() {
     setData(seedData);
+    setFhirConn({ status: "simulated", serverPatientId: null, error: null });
     localStorage.setItem(STORAGE_KEY, JSON.stringify(seedData));
+  }
+
+  async function handleConnectFHIR() {
+    setFhirConn({ status: "connecting", serverPatientId: null, error: null });
+    try {
+      const { serverPatientId, serverReadings } = await connectToFHIR(data.patient, sortedReadings);
+      setData((prev) => ({ ...prev, readings: serverReadings }));
+      setFhirConn({ status: "connected", serverPatientId, error: null });
+    } catch (err) {
+      setFhirConn({ status: "error", serverPatientId: null, error: err.message });
+    }
   }
 
   return (
@@ -251,47 +269,74 @@ export default function PulseFlowStarterApp() {
             </p>
           </div>
           <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
-            <span
-              style={{
-                background: "#dbeafe",
-                color: "#1e40af",
-                border: "1px solid #bfdbfe",
-                borderRadius: "999px",
-                padding: "8px 12px",
-                fontSize: "13px",
-                fontWeight: 700,
-              }}
-            >
-              FHIR Simulated
-            </span>
+            {/* Connection status badge */}
+            {fhirConn.status === "connected" && (
+              <span style={{ background: "#dcfce7", color: "#166534", border: "1px solid #bbf7d0", borderRadius: "999px", padding: "8px 12px", fontSize: "13px", fontWeight: 700 }}>
+                ✓ FHIR Connected
+              </span>
+            )}
+            {fhirConn.status === "connecting" && (
+              <span style={{ background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a", borderRadius: "999px", padding: "8px 12px", fontSize: "13px", fontWeight: 700 }}>
+                Connecting…
+              </span>
+            )}
+            {fhirConn.status === "error" && (
+              <span style={{ background: "#fee2e2", color: "#b91c1c", border: "1px solid #fecaca", borderRadius: "999px", padding: "8px 12px", fontSize: "13px", fontWeight: 700 }}>
+                FHIR Error
+              </span>
+            )}
+            {fhirConn.status === "simulated" && (
+              <span style={{ background: "#dbeafe", color: "#1e40af", border: "1px solid #bfdbfe", borderRadius: "999px", padding: "8px 12px", fontSize: "13px", fontWeight: 700 }}>
+                FHIR Simulated
+              </span>
+            )}
+
+            {/* Connect button — hidden when already connected */}
+            {fhirConn.status !== "connected" && (
+              <button
+                onClick={handleConnectFHIR}
+                disabled={fhirConn.status === "connecting"}
+                style={{
+                  padding: "10px 14px",
+                  borderRadius: "10px",
+                  border: "1px solid #bbf7d0",
+                  background: fhirConn.status === "connecting" ? "#f1f5f9" : "#dcfce7",
+                  color: fhirConn.status === "connecting" ? "#94a3b8" : "#166534",
+                  cursor: fhirConn.status === "connecting" ? "not-allowed" : "pointer",
+                  fontWeight: 600,
+                }}
+              >
+                {fhirConn.status === "connecting" ? "Connecting…" : fhirConn.status === "error" ? "Retry FHIR Connect" : "Connect to FHIR Server"}
+              </button>
+            )}
+
             <button
               onClick={() => downloadFHIRBundle(sortedReadings, data.patient)}
-              style={{
-                padding: "10px 14px",
-                borderRadius: "10px",
-                border: "1px solid #bfdbfe",
-                background: "#eff6ff",
-                color: "#1e40af",
-                cursor: "pointer",
-                fontWeight: 600,
-              }}
+              style={{ padding: "10px 14px", borderRadius: "10px", border: "1px solid #bfdbfe", background: "#eff6ff", color: "#1e40af", cursor: "pointer", fontWeight: 600 }}
             >
               Download FHIR Bundle
             </button>
             <button
               onClick={resetDemo}
-              style={{
-                padding: "10px 14px",
-                borderRadius: "10px",
-                border: "1px solid #cbd5e1",
-                background: "white",
-                cursor: "pointer",
-                fontWeight: 600,
-              }}
+              style={{ padding: "10px 14px", borderRadius: "10px", border: "1px solid #cbd5e1", background: "white", cursor: "pointer", fontWeight: 600 }}
             >
               Reset Demo Data
             </button>
           </div>
+
+          {/* FHIR error detail */}
+          {fhirConn.status === "error" && fhirConn.error && (
+            <div style={{ width: "100%", marginTop: "8px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "10px", padding: "10px 14px", fontSize: "13px", color: "#b91c1c" }}>
+              {fhirConn.error}
+            </div>
+          )}
+
+          {/* FHIR server link when connected */}
+          {fhirConn.status === "connected" && (
+            <div style={{ width: "100%", marginTop: "8px", fontSize: "12px", color: "#64748b" }}>
+              Connected to <a href={HAPI_BASE} target="_blank" rel="noreferrer" style={{ color: "#2563eb" }}>{HAPI_BASE}</a> · Patient ID: <code style={{ background: "#f1f5f9", padding: "1px 5px", borderRadius: "4px" }}>{fhirConn.serverPatientId}</code>
+            </div>
+          )}
         </div>
 
         {/* View toggle */}
@@ -360,7 +405,7 @@ export default function PulseFlowStarterApp() {
               <div>
                 <strong>FHIR ID:</strong>{" "}
                 <code style={{ fontSize: "11px", background: "#f1f5f9", padding: "2px 6px", borderRadius: "4px", color: "#1e40af" }}>
-                  {toFHIRPatient(data.patient).id}
+                  {fhirConn.status === "connected" ? fhirConn.serverPatientId : toFHIRPatient(data.patient).id}
                 </code>
               </div>
             </div>
@@ -510,21 +555,24 @@ export default function PulseFlowStarterApp() {
 
               <button
                 type="submit"
+                disabled={submitting}
                 style={{
                   padding: "12px 14px",
                   borderRadius: "10px",
                   border: "none",
-                  background: "#2563eb",
+                  background: submitting ? "#93c5fd" : "#2563eb",
                   color: "white",
                   fontWeight: 700,
-                  cursor: "pointer",
+                  cursor: submitting ? "not-allowed" : "pointer",
                 }}
               >
-                Save Reading
+                {submitting ? "Saving…" : fhirConn.status === "connected" ? "Save & POST to FHIR" : "Save Reading"}
               </button>
 
               <div style={{ color: "#64748b", fontSize: "12px", lineHeight: 1.5 }}>
-                Readings are stored locally and structured as FHIR R4 Observation resources.
+                {fhirConn.status === "connected"
+                  ? `Readings are POSTed as FHIR R4 Observation resources to ${HAPI_BASE}`
+                  : "Readings are stored locally and structured as FHIR R4 Observation resources."}
               </div>
             </form>
           </div>}
@@ -541,7 +589,7 @@ export default function PulseFlowStarterApp() {
                   <th style={{ padding: "12px 8px" }}>Diastolic</th>
                   <th style={{ padding: "12px 8px" }}>Status</th>
                   <th style={{ padding: "12px 8px" }}>Notes</th>
-                  <th style={{ padding: "12px 8px" }}>FHIR Resource ID</th>
+                  <th style={{ padding: "12px 8px" }}>{fhirConn.status === "connected" ? "HAPI FHIR Server ID" : "FHIR Resource ID"}</th>
                 </tr>
               </thead>
               <tbody>
@@ -555,7 +603,7 @@ export default function PulseFlowStarterApp() {
                       <td style={{ padding: "12px 8px" }}>{badge(status)}</td>
                       <td style={{ padding: "12px 8px" }}>{reading.notes || "—"}</td>
                       <td style={{ padding: "12px 8px", fontFamily: "monospace", fontSize: "11px", color: "#64748b" }}>
-                        {toFHIRObservation(reading, data.patient.id).id}
+                        {reading.fhirServerId || toFHIRObservation(reading, data.patient.id).id}
                       </td>
                     </tr>
                   );

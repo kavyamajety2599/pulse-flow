@@ -80,6 +80,19 @@ export function toFHIRObservation(reading, patientId) {
   };
 }
 
+export function fromFHIRObservation(obs) {
+  const sys = obs.component?.find((c) => c.code?.coding?.[0]?.code === "8480-6");
+  const dia = obs.component?.find((c) => c.code?.coding?.[0]?.code === "8462-4");
+  return {
+    id: obs.id,
+    fhirServerId: obs.id,
+    date: obs.effectiveDateTime,
+    systolic: sys?.valueQuantity?.value ?? 0,
+    diastolic: dia?.valueQuantity?.value ?? 0,
+    notes: obs.note?.[0]?.text ?? "",
+  };
+}
+
 export function toFHIRPatient(patient) {
   return {
     resourceType: "Patient",
