@@ -1,6 +1,4 @@
 // fhirService.js
-// Live FHIR R4 integration with the HAPI FHIR R4 public server.
-// Uses POST (server-assigned IDs) to avoid 412 version-conflict errors on PUT.
 import { toFHIRPatient, toFHIRObservation, fromFHIRObservation } from "./fhirAdapter.js";
 
 export const HAPI_BASE = "https://hapi.fhir.org/baseR4";
@@ -10,31 +8,34 @@ const FHIR_HEADERS = {
   Accept: "application/fhir+json",
 };
 
-// POST a resource without an id — server assigns a new one every time.
-// This avoids the 412 "HAPI-2840: duplicate resource" error from PUT.
 async function createResource(resource) {
-  // Strip the id so the server treats this as a pure create
   const { id: _dropped, ...body } = resource;
-  console.log("POSTing to FHIR:", JSON.stringify(body, null, 2));
 
   const url = `${HAPI_BASE}/${body.resourceType}`;
+
+  // If-None-Exist with a unique nonce forces HAPI to always treat this as a
+  // fresh create — it will never find a match, so it never returns 412.
+  const nonce = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const ifNoneExist = `identifier=pulseflow-nonce-${nonce}`;
+
   const res = await fetch(url, {
     method: "POST",
-    headers: FHIR_HEADERS,
+    headers: {
+      ...FHIR_HEADERS,
+      "If-None-Exist": ifNoneExist,
+    },
     body: JSON.stringify(body),
   });
 
   if (!res.ok) {
     const text = await res.text();
     throw new Error(
-      `FHIR POST ${body.resourceType} failed (${res.status}): ${text.slice(0, 300)}`
+      `FHIR POST ${body.resourceType} failed (${res.status}): ${text.slice(0, 500)}`
     );
   }
   return res.json();
 }
 
-// POST patient + all existing readings to HAPI FHIR R4.
-// Returns { serverPatientId, serverReadings } with real server-assigned IDs.
 export async function connectToFHIR(patient, readings) {
   const fhirPatient = toFHIRPatient(patient);
 
@@ -52,15 +53,12 @@ export async function connectToFHIR(patient, readings) {
   return { serverPatientId, serverReadings };
 }
 
-// POST a single new reading as an Observation to HAPI FHIR R4.
-// Returns the reading updated with the server-assigned FHIR ID.
 export async function postObservationToFHIR(reading, serverPatientId) {
   const fhirObs = toFHIRObservation(reading, serverPatientId);
   const serverObs = await createResource(fhirObs);
   return { ...reading, id: serverObs.id, fhirServerId: serverObs.id };
 }
 
-// GET all blood pressure Observations for a patient from HAPI FHIR R4.
 export async function fetchObservationsFromFHIR(serverPatientId) {
   const res = await fetch(
     `${HAPI_BASE}/Observation?patient=${serverPatientId}&code=55284-4&_sort=-date&_count=50`,
