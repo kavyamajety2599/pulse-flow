@@ -93,12 +93,13 @@ export function fromFHIRObservation(obs) {
   };
 }
 
+// fhirAdapter.js
 export function toFHIRPatient(patient) {
   return {
     resourceType: "Patient",
-    id: `${FHIR_BASE}${patient.id}`,
-    // Comment this out to bypass the duplicate MRN check on the public HAPI server
-    // identifier: [{ system: "urn:pulseflow:mrn", value: patient.mrn }],
+    // Use a unique ID that doesn't rely on the local ID or FHIR_BASE
+    id: `patient-${Date.now()}`, 
+   
     name: [{ text: patient.name }],
     birthDate: `${new Date().getFullYear() - patient.age}-01-01`,
     extension: [
