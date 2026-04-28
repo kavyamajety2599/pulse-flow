@@ -31,8 +31,9 @@ async function createResource(resource) {
 }
 
 export async function connectToFHIR(patient, readings) {
+  // Use session-unique identifier to avoid HAPI 412 duplicate errors
   const fhirPatient = toFHIRPatient(patient);
-
+  fhirPatient.identifier = [{ system: "urn:pulseflow:session", value: `${patient.mrn}-${Date.now()}` }];
   const serverPatient = await createResource(fhirPatient);
   const serverPatientId = serverPatient.id;
 
