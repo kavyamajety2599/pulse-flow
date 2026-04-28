@@ -1,11 +1,12 @@
 // fhirService.js
 import { toFHIRPatient, toFHIRObservation, fromFHIRObservation } from "./fhirAdapter.js";
 
-export const HAPI_BASE = "https://hapi.fhir.org/baseR4";
+export const HAPI_BASE = "https://r4.smarthealthit.org";
 
 const FHIR_HEADERS = {
   "Content-Type": "application/fhir+json",
   Accept: "application/fhir+json",
+  "Cache-Control": "no-cache",
 };
 
 async function createResource(resource) {
@@ -15,6 +16,7 @@ async function createResource(resource) {
 
   const res = await fetch(url, {
     method: "POST",
+    mode: "cors",
     headers: {
       ...FHIR_HEADERS,
     },
