@@ -20,11 +20,20 @@ const seedData = {
   patient: {
     id: "pt-001",
     name: "John Doe",
-    mrn: "pulseflow-" + Math.random().toString(36).substring(7),
+    mrn: "12345",
     age: 54,
     condition: "Stage 1/2 Hypertension Monitoring",
   },
-  readings: [],
+  readings: [
+    { id: 1, date: "2026-03-01", systolic: 146, diastolic: 94, notes: "Morning reading" },
+    { id: 2, date: "2026-03-04", systolic: 142, diastolic: 91, notes: "Before medication" },
+    { id: 3, date: "2026-03-07", systolic: 138, diastolic: 88, notes: "Felt normal" },
+    { id: 4, date: "2026-03-10", systolic: 144, diastolic: 92, notes: "Mild stress" },
+    { id: 5, date: "2026-03-13", systolic: 136, diastolic: 86, notes: "Post-walk" },
+    { id: 6, date: "2026-03-16", systolic: 141, diastolic: 90, notes: "Evening reading" },
+    { id: 7, date: "2026-03-20", systolic: 148, diastolic: 96, notes: "Missed sleep" },
+    { id: 8, date: "2026-03-24", systolic: 139, diastolic: 87, notes: "After breakfast" },
+  ],
 };
 
 function loadData() {
